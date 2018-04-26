@@ -99,6 +99,8 @@ if __name__ == '__main__':
         help="run on CUDA")
     parser.add_argument("--report-interval", type=int, default=50,
         help="how often to report ELBO")
+    parser.add_argument("--out-dir", type=str,
+        help="where to put any outputs. WARNING: Any old content will be replaced.")
     args = parser.parse_args()
 
     root = './data'
@@ -148,4 +150,11 @@ if __name__ == '__main__':
         train(vae, train_loader, optim, logger)
         test_elbo = evaluate(vae, test_loader)
         print("Time elapsed: {:.1f} s, test ELBO: {:.2f}".format(logger.time_since_creation(), test_elbo))
+
+    if args.out_dir:
+        with open(args.out_dir + '/' + "vae.mdl", 'wb') as f:
+            print('saving model...')
+            vae.to(torch.device('cpu')) # this little trick to make it easy to load in CUDA-free env
+            torch.save(vae, f)
+            vae.to(device)
 
