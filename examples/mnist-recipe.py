@@ -53,7 +53,7 @@ class SimpleLogger:
 
 def train(vae, data, optim, loss_logger=None):
     for X, _ in data:
-        X = torch.autograd.Variable(X.view(-1, 28**2))
+        X = torch.autograd.Variable(X.view(-1, 28**2)).to(device)
         sth = vae.forward(X)
         complete_loss = vae.loss(X, sth)
         obj = complete_loss[0].mean()
@@ -68,7 +68,7 @@ def train(vae, data, optim, loss_logger=None):
 def evaluate(vae, data):
     elbos = []
     for X, _ in data:
-        X = torch.autograd.Variable(X.view(-1, 28**2))
+        X = torch.autograd.Variable(X.view(-1, 28**2)).to(device)
         sth = vae.forward(X)
         complete_loss = vae.loss(X, sth)
         obj = complete_loss[0].mean()
@@ -85,10 +85,14 @@ if __name__ == '__main__':
         help="dimensionality of the latent space (where the KLD is computed)")
     parser.add_argument("--nb-hidden", type=int, default=100,
         help="dimensionality of hidden layers of encoder/decoder")
+    # this is NOT (yet) what Lucas asked for for the NIPS experiments,
+    # as data is, in every epoch, first shuffled and then cut
     parser.add_argument("--nb-batches", type=int, default=60001,
         help="how many training batches to supply. Effectively restricts training data.")
     parser.add_argument("--nb-epochs", type=int, default=1,
-        help="how many training batches to supply. Effectively restricts training data.")
+        help="number of runs through training data")
+    parser.add_argument("--cuda", action='store_true',
+        help="run on CUDA")
     parser.add_argument("--report-interval", type=int, default=50,
         help="how often to report ELBO")
     args = parser.parse_args()
@@ -96,10 +100,11 @@ if __name__ == '__main__':
     root = './data'
     download = False  # set to True if the line "train_set = ..." complains
 
+    device = torch.device("cuda:0" if args.cuda else "cpu")
+
     trans = transforms.Compose([
         transforms.RandomVerticalFlip(p=1.0),
         transforms.ToTensor(), 
-    #    transforms.Normalize((0.5,), (1.0,)),
     ])
     train_set = torchvision.datasets.MNIST(root=root, train=True, transform=trans, download=download)
     test_set = torchvision.datasets.MNIST(root=root, train=False, transform=trans)
@@ -131,6 +136,7 @@ if __name__ == '__main__':
 
     latent_normal = beer.models.FixedIsotropicGaussian(args.latent_dim)
     vae = beer.models.VAE(copy.deepcopy(enc_proto), copy.deepcopy(dec_proto), latent_normal, nsamples=1)
+    vae.to(device)
 
     logger = SimpleLogger(args.report_interval)
     optim = torch.optim.Adam(vae.parameters(), lr=1e-3)
