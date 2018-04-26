@@ -81,7 +81,7 @@ class VAE(nn.Module):
 
         return {
             'encoder_state': encoder_state,
-            'p_np_params': Variable(torch.FloatTensor(p_np_params)),
+            'p_np_params': Variable(torch.FloatTensor(p_np_params).to(X.device)),
             'acc_stats': acc_stats,
             'decoder_state': decoder_state,
             'nsamples': nsamples
