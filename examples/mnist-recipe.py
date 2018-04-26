@@ -33,20 +33,36 @@ class BatchNumberLimiter:
     def __len__(self):
         return self._limit
 
-def train(nb_epochs):
-    for i in range(nb_epochs):
-        for X, _ in train_loader:
-            X = torch.autograd.Variable(X.view(-1, 28**2))
-            sth = vae.forward(X)
-            neg_elbo, llh, kld = vae.loss(X, sth)
-            obj = neg_elbo.mean()
-            mean_elbos.append(-obj.item())
-            mean_klds.append(kld.mean().item())
-            mean_llhs.append(llh.mean().item())
-            optim.zero_grad()
-            obj.backward()
-            optim.step()
-        print("epoch {} done, last ELBO: {}".format(i, mean_elbos[-1]))
+
+class SimpleLogger:
+    def __init__(self, report_interval):
+        self._mean_elbos = []
+        self._mean_klds = []
+        self._mean_llhs = []
+        self._report_interval = report_interval
+
+    def log(self, total_loss):
+        self._mean_elbos.append(-total_loss[0].mean().item()) 
+        self._mean_llhs.append(total_loss[1].mean().item())
+        self._mean_klds.append(total_loss[2].mean().item())
+
+        if len(self._mean_elbos) > 0 and len(self._mean_elbos) % self._report_interval == 0:
+            reported_suffix = self._mean_elbos[-self._report_interval:]
+            print(sum(reported_suffix) / len(reported_suffix))
+
+
+def train(vae, data, optim, loss_logger=None):
+    for X, _ in data:
+        X = torch.autograd.Variable(X.view(-1, 28**2))
+        sth = vae.forward(X)
+        complete_loss = vae.loss(X, sth)
+        obj = complete_loss[0].mean()
+        optim.zero_grad()
+        obj.backward()
+        optim.step()
+
+        if loss_logger is not None:
+            loss_logger.log(complete_loss)
 
 
 if __name__ == '__main__':
@@ -61,6 +77,8 @@ if __name__ == '__main__':
         help="how many training batches to supply. Effectively restricts training data.")
     parser.add_argument("--nb-epochs", type=int, default=1,
         help="how many training batches to supply. Effectively restricts training data.")
+    parser.add_argument("--report-interval", type=int, default=50,
+        help="how often to report ELBO")
     args = parser.parse_args()
 
     root = './data'
@@ -101,10 +119,8 @@ if __name__ == '__main__':
 
     latent_normal = beer.models.FixedIsotropicGaussian(args.latent_dim)
     vae = beer.models.VAE(copy.deepcopy(enc_proto), copy.deepcopy(dec_proto), latent_normal, nsamples=1)
-    mean_elbos = []
-    mean_klds = []
-    mean_llhs = []
 
-    # a reasonable training procedure
+    logger = SimpleLogger(args.report_interval)
     optim = torch.optim.Adam(vae.parameters(), lr=1e-3)
-    train(args.nb_epochs)
+    for epoch_no in range(1, args.nb_epochs+1):
+        train(vae, train_loader, optim, logger)
