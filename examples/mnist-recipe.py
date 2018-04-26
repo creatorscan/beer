@@ -65,6 +65,18 @@ def train(vae, data, optim, loss_logger=None):
             loss_logger.log(complete_loss)
 
 
+def evaluate(vae, data):
+    elbos = []
+    for X, _ in data:
+        X = torch.autograd.Variable(X.view(-1, 28**2))
+        sth = vae.forward(X)
+        complete_loss = vae.loss(X, sth)
+        obj = complete_loss[0].mean()
+        elbos.append(-obj.item())
+
+    return sum(elbos) / len(elbos)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch-size", type=int, default=16,
@@ -124,3 +136,5 @@ if __name__ == '__main__':
     optim = torch.optim.Adam(vae.parameters(), lr=1e-3)
     for epoch_no in range(1, args.nb_epochs+1):
         train(vae, train_loader, optim, logger)
+
+    print("Test mean ELBO:", evaluate(vae, test_loader))
