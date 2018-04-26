@@ -273,7 +273,7 @@ def normal_diag_natural_params(mean, var):
 
 class FixedIsotropicGaussian:
     def __init__(self, dim):
-        mean = torch.ones(dim)
+        mean = torch.zeros(dim)
         var = torch.ones(dim)
         self._np = normal_diag_natural_params(mean, var)
         
