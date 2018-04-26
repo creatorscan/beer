@@ -33,10 +33,33 @@ class BatchNumberLimiter:
     def __len__(self):
         return self._limit
 
+def train(nb_epochs):
+    for i in range(nb_epochs):
+        for X, _ in train_loader:
+            X = torch.autograd.Variable(X.view(-1, 28**2))
+            sth = vae.forward(X)
+            neg_elbo, llh, kld = vae.loss(X, sth)
+            obj = neg_elbo.mean()
+            mean_elbos.append(-obj.item())
+            mean_klds.append(kld.mean().item())
+            mean_llhs.append(llh.mean().item())
+            optim.zero_grad()
+            obj.backward()
+            optim.step()
+        print("epoch {} done, last ELBO: {}".format(i, mean_elbos[-1]))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument("--batch-size", type=int, default=16,
+        help="batch size")
+    parser.add_argument("--latent-dim", type=int, default=2,
+        help="dimensionality of the latent space (where the KLD is computed)")
+    parser.add_argument("--nb-hidden", type=int, default=100,
+        help="dimensionality of hidden layers of encoder/decoder")
     parser.add_argument("--nb-batches", type=int, default=60001,
+        help="how many training batches to supply. Effectively restricts training data.")
+    parser.add_argument("--nb-epochs", type=int, default=1,
         help="how many training batches to supply. Effectively restricts training data.")
     args = parser.parse_args()
 
@@ -51,61 +74,37 @@ if __name__ == '__main__':
     train_set = torchvision.datasets.MNIST(root=root, train=True, transform=trans, download=download)
     test_set = torchvision.datasets.MNIST(root=root, train=False, transform=trans)
 
-    batch_size = 16
-
     train_loader = torch.utils.data.DataLoader(
                      dataset=train_set,
-                     batch_size=batch_size,
+                     batch_size=args.batch_size,
                      shuffle=True)
     train_loader = BatchNumberLimiter(train_loader, args.nb_batches)
 
     test_loader = torch.utils.data.DataLoader(
                     dataset=test_set,
-                    batch_size=batch_size,
+                    batch_size=args.batch_size,
                     shuffle=False)
 
-    print('==>>> total trainning batch number: {}'.format(len(train_loader)))
-    print('==>>> total testing batch number: {}'.format(len(test_loader)))
-
     observed_dim = 28*28
-    latent_dim = 2
-
-    hidden_dim = 400
 
     enc_nn = torch.nn.Sequential(
-        torch.nn.Linear(observed_dim, hidden_dim),
+        torch.nn.Linear(observed_dim, args.nb_hidden),
         torch.nn.Tanh(),
     )
-    enc_proto = beer.models.MLPNormalDiag(enc_nn, latent_dim)
+    enc_proto = beer.models.MLPNormalDiag(enc_nn, args.latent_dim)
 
     dec_nn = torch.nn.Sequential(    
-        torch.nn.Linear(latent_dim, hidden_dim),
+        torch.nn.Linear(args.latent_dim, args.nb_hidden),
         torch.nn.Tanh(),
     )
     dec_proto = beer.models.MLPBernoulli(dec_nn, observed_dim)
 
-    import copy
-    latent_normal = beer.models.FixedIsotropicGaussian(latent_dim)
+    latent_normal = beer.models.FixedIsotropicGaussian(args.latent_dim)
     vae = beer.models.VAE(copy.deepcopy(enc_proto), copy.deepcopy(dec_proto), latent_normal, nsamples=1)
     mean_elbos = []
     mean_klds = []
     mean_llhs = []
 
-    def train(nb_epochs):
-        for i in range(nb_epochs):
-            for X, _ in train_loader:
-                X = torch.autograd.Variable(X.view(-1, 28**2))
-                sth = vae.forward(X)
-                neg_elbo, llh, kld = vae.loss(X, sth)
-                obj = neg_elbo.mean()
-                mean_elbos.append(-obj.item())
-                mean_klds.append(kld.mean().item())
-                mean_llhs.append(llh.mean().item())
-                optim.zero_grad()
-                obj.backward()
-                optim.step()
-            print("epoch {} done, last ELBO: {}".format(i, mean_elbos[-1]))
-
     # a reasonable training procedure
     optim = torch.optim.Adam(vae.parameters(), lr=1e-3)
-    train(1)
+    train(args.nb_epochs)
