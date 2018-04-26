@@ -3,8 +3,8 @@ import sys
 sys.path.insert(0, '../')
 
 import copy
-
 import argparse
+import time
 
 import beer
 import numpy as np
@@ -40,6 +40,7 @@ class SimpleLogger:
         self._mean_klds = []
         self._mean_llhs = []
         self._report_interval = report_interval
+        self._creation_time = time.time()
 
     def log(self, total_loss):
         self._mean_elbos.append(-total_loss[0].mean().item()) 
@@ -48,7 +49,10 @@ class SimpleLogger:
 
         if len(self._mean_elbos) > 0 and len(self._mean_elbos) % self._report_interval == 0:
             reported_suffix = self._mean_elbos[-self._report_interval:]
-            print(sum(reported_suffix) / len(reported_suffix))
+            print("{:.2f}".format(sum(reported_suffix) / len(reported_suffix)))
+
+    def time_since_creation(self):
+        return time.time() - self._creation_time
 
 
 def train(vae, data, optim, loss_logger=None):
@@ -142,5 +146,6 @@ if __name__ == '__main__':
     optim = torch.optim.Adam(vae.parameters(), lr=1e-3)
     for epoch_no in range(1, args.nb_epochs+1):
         train(vae, train_loader, optim, logger)
+        test_elbo = evaluate(vae, test_loader)
+        print("Time elapsed: {:.1f} s, test ELBO: {:.2f}".format(logger.time_since_creation(), test_elbo))
 
-    print("Test mean ELBO:", evaluate(vae, test_loader))
