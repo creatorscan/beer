@@ -8,11 +8,13 @@ setup(
     author_email='lucas.ondel@gmail.com',
     license='MIT',
     install_requires=[
+        'pytorch',
+        'torchvision',
         'numpy',
         'scipy',
     ],
     version=1.0,
-    packages=['beer', 'beer.models']
+    packages=['beer', 'beer.features']
 )
 
 
