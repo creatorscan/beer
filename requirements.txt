@@ -1,0 +1,4 @@
+beer
+torch>=0.4
+numpy>=1.14.3
+bokeh
